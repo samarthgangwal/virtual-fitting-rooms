@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+
+    <body style="margin: 0">
+        <p>Click the button to get your coordinates.</p>
+        <button onclick="getLocation()">Try It</button>
+<p id="demo"></p>
+        <div id="map" style="width: 100vw; height: 100vh"></div>
+            <script src="https://js.api.here.com/v3/3.1.22.0/mapsjs-core.js" type="text/javascript" charset="utf-8"></script>
+            <script src="https://js.api.here.com/v3/3.1.22.0/mapsjs-core-legacy.js" type="text/javascript" charset="utf-8"></script>
+            <script src="https://js.api.here.com/v3/3.1.22.0/mapsjs-service.js" type="text/javascript" charset="utf-8"></script>
+            <script src="https://js.api.here.com/v3/3.1.22.0/mapsjs-service-legacy.js" type="text/javascript" charset="utf-8"></script>
+            <script src="https://js.api.here.com/v3/3.1.22.0/mapsjs-mapevents.js" type="text/javascript" charset="utf-8"></script>
+            <script src="https://stuk.github.io/jszip/dist/jszip.js"></script>
+            <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+            <script>
+                const platform = new H.service.Platform ({
+                    'apikey' : '2p7Z6V3GgmS5BoaCCFb3qse3Sd8-bo8gWZgpIBZphcE',
+                    'useCIT': true,
+                    'useHTTPS': true,
+                });
+                const map = new H.Map(
+                    document.getElementById('map'),
+                    platform.createDefaultLayers().vector.normal.map,
+                    {
+                        zoom: 10,
+                        center: { lat: 17.428251,lng: 78.409830},
+                    }
+                );
+                
+                const mapEvents = new H.mapevents.MapEvents(map);
+                const mapBehavior = new H.mapevents.Behavior(mapEvents);
+
+                // defining the polygon
+                const lineString = new H.geo.LineString();
+                lineString.pushPoint({ lat: 17.428251,lng: 78.409830});
+                lineString.pushPoint({ lat: 17.428159,lng: 78.409950});
+                lineString.pushPoint({ lat: 17.428274,lng: 78.410049});
+                lineString.pushPoint({ lat: 17.428367,lng: 78.409930});
+                lineString.pushPoint({ lat: 17.428251,lng: 78.409830});
+
+                //calling the polygon
+                const polygon = new H.map.Polygon(lineString);
+                map.addObject(polygon);
+
+                //console getting the wkt format data
+                const geometry = polygon.getGeometry();
+                const wkt = geometry.toString();
+                console.log(wkt);
+                
+                //opening zip or creating
+                const zip = new JSZip();
+                zip.file("data.wkt","NAME\tWKT\n" + "NU_Campus" + "\t" + wkt);
+                zip.generateAsync({ type: "blob" }).then(content => {
+                    var formData = new FormData();
+                    formData.append("zipfile", content);
+                    axios.post("https://fleet.ls.hereapi.com/2/layers/upload.json", formData, {
+                        headers: {
+                            "content-type": "multipart/form-data"
+                        },
+                        params: {
+                            "apikey" : "2p7Z6V3GgmS5BoaCCFb3qse3Sd8-bo8gWZgpIBZphcE",
+                            "layer_id": "1234"
+
+                        }
+                    }).then(result => {
+                        console.log(result);
+                    }, error => {
+                        console.error(error);
+                    });
+                }, error => {
+                    console.error(error);
+                });
+
+                /*navigator.geolocation.watchPosition(({coords}) => {
+                    
+                    var lat = coords.latitude;
+                    var lon = coords.longitude;
+                    console.log(lat);
+                    console.log(lon);
+                }*/
+
+                //creating a positional marker
+                var marker = new H.map.Marker({ lat: 27.9588, lng: 76.40});
+
+                //geofencing service
+                var geofencing = platform.getGeofencingService();
+
+                map.addObject(marker);
+
+                //click event on marker
+                map.addObject(marker);
+                map.addEventListener("tap", ev => {
+                    var target = ev.target;
+                    map.removeObject(marker);   /// removing the older marker when new one arrives
+                    marker = new H.map.Marker(map.screenToGeo(ev.currentPointer.viewportX, ev.currentPointer.viewportY));
+                    map.addObject(marker);
+
+                    //utilizing geofencing service
+                    geofencing.request(
+                        H.service.extension.geofencing.Service.EntryPoint.SEARCH_PROXIMITY,
+                        {
+                            "layer_ids": ["1234"],
+                            "proximity": marker.getGeometry().lat + "," + marker.getGeometry().lng,
+                            "key_attributes": ["NAME"]
+                        },
+                        result => {
+                            if(result.geometries.length > 0) {
+                                alert("Within the geofence!");
+                                console.log(result);
+                            }
+                            else{
+                                alert("outside the region");
+                                console.log(result);
+                            }
+                        },
+                        error => {
+                            console.error(error);
+                        }
+                    );
+                });
+            </script>
+            <script>
+                 var x = document.getElementById("demo");
+
+function getLocation() {
+if (navigator.geolocation) {
+    navigator.geolocation.watchPosition(showPosition);
+} else { 
+    x.innerHTML = "Geolocation is not supported by this browser.";
+}
+}
+    
+function showPosition(position) {
+    x.innerHTML="Latitude: " + position.coords.latitude + 
+    "<br>Longitude: " + position.coords.longitude;
+}
+            </script>
+    </body>
+</html>
